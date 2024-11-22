@@ -1,7 +1,9 @@
 from flask import Flask, request, jsonify
 import spacy
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 nlp = spacy.load("en_core_web_sm")
 
 # Define a static dictionary for term definitions
