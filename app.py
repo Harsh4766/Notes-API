@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import spacy
 import requests
 from flask_cors import CORS
+import re
 
 app = Flask(__name__)
 CORS(app)
@@ -25,10 +26,21 @@ def fetch_definition_from_api(term):
                     first_meaning = definitions[0]
                     if "definitions" in first_meaning and first_meaning["definitions"]:
                         return first_meaning["definitions"][0]["definition"]
-        return "Definition not available via API."
+        return None  # No definition found
     except Exception as e:
         print(f"Error fetching definition from API: {e}")
-        return "Error fetching definition from API."
+        return None  # Handle API errors gracefully
+    
+
+def preprocess_text(text):
+    """
+    Preprocess text to ensure proper spacing around punctuation for better entity recognition.
+    """
+    # Remove unwanted spaces and fix punctuation marks
+    text = re.sub(r'([.,!?])', r' \1 ', text)  # Add space before and after punctuation
+    text = re.sub(r'\s+', ' ', text)  # Remove extra spaces
+    text = re.sub(r'\s([.,!?])', r'\1', text)  # Remove space before punctuation (like commas after names)
+    return text.strip()
 
 @app.route('/process_note', methods=['POST'])
 def process_note():
@@ -37,7 +49,10 @@ def process_note():
     """
     data = request.json
     content = data.get('content', '')
-    doc = nlp(content)
+
+    # Preprocess content to normalize punctuation
+    processed_content = preprocess_text(content)
+    doc = nlp(processed_content)  # Use the preprocessed content for NLP analysis
 
     key_terms = []
 
@@ -45,7 +60,11 @@ def process_note():
     for ent in doc.ents:
         term = ent.text
         definition = fetch_definition_from_api(term)
-        print(definition)
+        
+        # If definition is not found, use the entity label as the fallback
+        if not definition:
+            definition = f"Entity: {term}, Type: {ent.label_}"
+        
         key_terms.append({"term": term, "definition": definition})
     
     return jsonify({"key_terms": key_terms})
